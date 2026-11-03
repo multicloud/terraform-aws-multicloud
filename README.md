@@ -39,30 +39,51 @@ It creates no access key and no secret.
 
 ## Use
 
-The Multicloud API returns a snippet for your account. It looks like this.
-All values are placeholders.
+`POST /api/v1/orgs/{slug}/cloud-accounts` (or `mctl cloud-account create`) returns a ready snippet.
+The API fills in every value: the API base, the org slug, the account row ID, the external ID, the broker role ARNs,
+the regions and the module version. You do not fill in values by hand.
+The snippet looks like this. All values are placeholders.
 
 ```hcl
+variable "multicloud_connect_token" {
+  type      = string
+  sensitive = true
+}
+
 module "multicloud" {
   source  = "multicloud/multicloud/aws"
-  version = "1.0.0"
+  version = "1.0.1"
 
-  api_base       = "https://api.example.com"
-  org_slug       = "acme"
-  account_row_id = 42
-  external_id    = "replace-with-the-external-id-from-the-api"
-  connect_token  = var.connect_token
+  api_base         = "https://api.example.com"
+  org_slug         = "acme"
+  account_row_id   = 42
+  external_id      = "replace-with-the-external-id-from-the-api"
   broker_role_arns = [
     "arn:aws:iam::111122223333:role/multicloud-broker-prod-scheduler",
     "arn:aws:iam::111122223333:role/multicloud-broker-prod-api",
   ]
+  regions          = ["us-east-1"]
+  connect_token    = var.multicloud_connect_token
+}
+
+# The fallback "mctl cloud-account connect --from-terraform-output" reads these.
+output "role_arn" {
+  value = module.multicloud.role_arn
+}
+
+output "policy_version" {
+  value = module.multicloud.policy_version
+}
+
+output "module_version" {
+  value = module.multicloud.module_version
 }
 ```
 
 The provider block (credentials and region) is yours. The module does not configure it.
 
 1. Put the snippet in your Terraform code.
-2. Pass the connect token as `TF_VAR_connect_token`. Do not write it in a file.
+2. Pass the connect token as `TF_VAR_multicloud_connect_token`. Do not write it in a file.
 3. Run `terraform init`, then `terraform apply`.
 
 If the post to the Multicloud API fails, `apply` fails.

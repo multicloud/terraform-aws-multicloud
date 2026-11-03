@@ -26,28 +26,41 @@ run "role_trusts_only_broker_with_external_id" {
   command = plan
 
   assert {
-    condition     = length(jsondecode(aws_iam_role.provisioner.assume_role_policy).Statement) == 1
-    error_message = "the trust policy must have exactly one statement"
+    condition     = length(jsondecode(aws_iam_role.provisioner.assume_role_policy).Statement) == 2
+    error_message = "the trust policy must have exactly two statements"
   }
 
   assert {
-    condition     = jsonencode(jsondecode(aws_iam_role.provisioner.assume_role_policy).Statement[0].Principal) == jsonencode({ AWS = var.broker_role_arns })
-    error_message = "Principal.AWS must be exactly the broker role ARNs"
+    condition = alltrue([for s in jsondecode(aws_iam_role.provisioner.assume_role_policy).Statement :
+    jsonencode(s.Principal) == jsonencode({ AWS = var.broker_role_arns }) && s.Effect == "Allow"])
+    error_message = "every trust statement must be an Allow for exactly the broker role ARNs"
   }
 
   assert {
-    condition     = jsondecode(aws_iam_role.provisioner.assume_role_policy).Statement[0].Effect == "Allow"
-    error_message = "the trust statement must be an Allow"
-  }
-
-  assert {
-    condition     = jsonencode(jsondecode(aws_iam_role.provisioner.assume_role_policy).Statement[0].Action) == jsonencode(["sts:AssumeRole", "sts:SetSourceIdentity", "sts:TagSession"])
-    error_message = "the trust actions must be AssumeRole, SetSourceIdentity and TagSession"
+    condition     = jsonencode(jsondecode(aws_iam_role.provisioner.assume_role_policy).Statement[0].Action) == jsonencode("sts:AssumeRole")
+    error_message = "the first trust statement must grant sts:AssumeRole only"
   }
 
   assert {
     condition     = jsonencode(jsondecode(aws_iam_role.provisioner.assume_role_policy).Statement[0].Condition) == jsonencode({ StringEquals = { "sts:ExternalId" = var.external_id } })
-    error_message = "the only trust condition must be sts:ExternalId == var.external_id"
+    error_message = "sts:AssumeRole must need sts:ExternalId == var.external_id"
+  }
+
+  assert {
+    condition = alltrue([for s in jsondecode(aws_iam_role.provisioner.assume_role_policy).Statement :
+    try(s.Condition.StringEquals["sts:ExternalId"], null) == var.external_id if contains(flatten([s.Action]), "sts:AssumeRole")])
+    error_message = "every statement that grants sts:AssumeRole must need sts:ExternalId == var.external_id"
+  }
+
+  # AWS checks SetSourceIdentity and TagSession without the external ID (live implicit deny, PR 5).
+  assert {
+    condition     = jsonencode(jsondecode(aws_iam_role.provisioner.assume_role_policy).Statement[1].Action) == jsonencode(["sts:SetSourceIdentity", "sts:TagSession"])
+    error_message = "the second trust statement must grant SetSourceIdentity and TagSession only"
+  }
+
+  assert {
+    condition     = jsonencode(jsondecode(aws_iam_role.provisioner.assume_role_policy).Statement[1].Condition) == jsonencode({ StringEquals = { "sts:SourceIdentity" = ["scheduler", "api-server"] } })
+    error_message = "the session statement must limit sts:SourceIdentity to scheduler and api-server"
   }
 
   assert {

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.1
+
+Fix: Multicloud could not assume the role (AWS answered AccessDenied on `sts:SetSourceIdentity`).
+
+- The trust policy now has two statements. `sts:AssumeRole` still needs your ExternalId. `sts:SetSourceIdentity` and `sts:TagSession` are in their own statement, because AWS checks them without the ExternalId. That statement allows only the source identities `scheduler` and `api-server`. Neither action gives access by itself.
+- Upgrade: change `version` to `1.0.1` and run `tofu apply` (or `terraform apply`). Only the trust policy of the role changes.
+
 ## 1.0.0
 
 First release of the AWS connect module.
