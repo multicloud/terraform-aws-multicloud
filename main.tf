@@ -3,7 +3,7 @@
 # with var.external_id.
 
 locals {
-  module_version = "1.0.1"
+  module_version = "1.0.2"
 
   # The source identity each Multicloud caller sets on its session (CloudTrail sourceIdentity).
   source_identities = ["scheduler", "api-server"]

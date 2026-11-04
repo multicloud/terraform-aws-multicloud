@@ -15,7 +15,8 @@
           "ec2:DescribeSubnets",
           "ec2:DescribeVpcs",
           "ec2:GetConsoleOutput",
-          "servicequotas:GetServiceQuota"
+          "servicequotas:GetServiceQuota",
+          "servicequotas:ListRequestedServiceQuotaChangeHistory"
         ],
         "Effect": "Allow",
         "Resource": [
@@ -263,8 +264,7 @@
       },
       {
         "Action": [
-          "servicequotas:RequestServiceQuotaIncrease",
-          "servicequotas:ListRequestedServiceQuotaChangeHistory"
+          "servicequotas:RequestServiceQuotaIncrease"
         ],
         "Condition": {
           "StringEquals": {
@@ -280,5 +280,5 @@
     ],
     "Version": "2012-10-17"
   },
-  "policy_version": 2
+  "policy_version": 3
 }

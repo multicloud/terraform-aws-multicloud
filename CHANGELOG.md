@@ -1,5 +1,15 @@
 # Changelog
 
+The Google Cloud module (`gcp/`) has its own `gcp/CHANGELOG.md`. The versions below are the AWS module.
+
+## 1.0.2
+
+Fix: Multicloud could not read your list of quota increase requests, so it could not ask AWS for spot quota without a risk of asking twice.
+
+- The role can now list your quota increase requests (`servicequotas:ListRequestedServiceQuotaChangeHistory`). This action is read-only. AWS gives it no condition key, so it moved out of the statement that limits quota actions to EC2. Requesting an increase (`servicequotas:RequestServiceQuotaIncrease`) is still limited to EC2 quotas.
+- The policy version is now 3.
+- Upgrade: change `version` to `1.0.2` and run `tofu apply` (or `terraform apply`). Only the permission policy of the role changes.
+
 ## 1.0.1
 
 Fix: Multicloud could not assume the role (AWS answered AccessDenied on `sts:SetSourceIdentity`).

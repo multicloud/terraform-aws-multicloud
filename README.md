@@ -4,6 +4,9 @@ This Terraform module connects one AWS account to Multicloud.
 It creates a role that Multicloud assumes.
 It creates no access key and no secret.
 
+The Google Cloud module is in `gcp/`. Its own `gcp/README.md` and `gcp/CHANGELOG.md` describe it.
+The rest of this file describes the AWS module.
+
 ## What the module creates
 
 - The IAM role `MulticloudProvisioner-<8 hex>`.
@@ -52,7 +55,7 @@ variable "multicloud_connect_token" {
 
 module "multicloud" {
   source  = "multicloud/multicloud/aws"
-  version = "1.0.1"
+  version = "1.0.2"
 
   api_base         = "https://api.example.com"
   org_slug         = "acme"
