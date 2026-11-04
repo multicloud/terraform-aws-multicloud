@@ -1,6 +1,8 @@
-# Service-linked roles that EC2 Spot and EC2 Fleet need (R7). The provisioner role cannot
-# create them, and a second create call fails with "already exists". So the module looks for
-# each role first and creates it only when the account has none.
+# Service-linked roles that EC2 Spot and EC2 Fleet need (R7), and the one that Service Quotas
+# needs before it accepts the first quota increase request of an account (without it,
+# RequestServiceQuotaIncrease fails with DependencyAccessDeniedException). The provisioner role
+# cannot create them, and a second create call fails with "already exists". So the module looks
+# for each role first and creates it only when the account has none.
 #
 # Why the description marker exists: the lookup (data.aws_iam_roles) runs on every plan, and
 # after the first apply it finds the role that this module created. Without a marker, the
@@ -28,6 +30,10 @@ data "aws_iam_roles" "fleet" {
   path_prefix = "/aws-service-role/ec2fleet.amazonaws.com/"
 }
 
+data "aws_iam_roles" "servicequotas" {
+  path_prefix = "/aws-service-role/servicequotas.amazonaws.com/"
+}
+
 data "aws_iam_role" "spot" {
   count = length(data.aws_iam_roles.spot.names) == 0 ? 0 : 1
   name  = tolist(data.aws_iam_roles.spot.names)[0]
@@ -36,6 +42,11 @@ data "aws_iam_role" "spot" {
 data "aws_iam_role" "fleet" {
   count = length(data.aws_iam_roles.fleet.names) == 0 ? 0 : 1
   name  = tolist(data.aws_iam_roles.fleet.names)[0]
+}
+
+data "aws_iam_role" "servicequotas" {
+  count = length(data.aws_iam_roles.servicequotas.names) == 0 ? 0 : 1
+  name  = tolist(data.aws_iam_roles.servicequotas.names)[0]
 }
 
 resource "aws_iam_service_linked_role" "spot" {
@@ -47,5 +58,11 @@ resource "aws_iam_service_linked_role" "spot" {
 resource "aws_iam_service_linked_role" "fleet" {
   count            = var.manage_service_linked_roles && (length(data.aws_iam_roles.fleet.names) == 0 || try(data.aws_iam_role.fleet[0].description, "") == local.slr_marker) ? 1 : 0
   aws_service_name = "ec2fleet.amazonaws.com"
+  description      = local.slr_marker
+}
+
+resource "aws_iam_service_linked_role" "servicequotas" {
+  count            = var.manage_service_linked_roles && (length(data.aws_iam_roles.servicequotas.names) == 0 || try(data.aws_iam_role.servicequotas[0].description, "") == local.slr_marker) ? 1 : 0
+  aws_service_name = "servicequotas.amazonaws.com"
   description      = local.slr_marker
 }

@@ -214,9 +214,16 @@ run "slrs_created_when_absent" {
     }
   }
 
+  override_data {
+    target = data.aws_iam_roles.servicequotas
+    values = {
+      names = []
+    }
+  }
+
   assert {
-    condition     = length(aws_iam_service_linked_role.spot) == 1 && length(aws_iam_service_linked_role.fleet) == 1
-    error_message = "both service-linked roles must be created in a fresh account"
+    condition     = length(aws_iam_service_linked_role.spot) == 1 && length(aws_iam_service_linked_role.fleet) == 1 && length(aws_iam_service_linked_role.servicequotas) == 1
+    error_message = "all three service-linked roles must be created in a fresh account"
   }
 }
 
@@ -237,6 +244,13 @@ run "slrs_skipped_when_present" {
     }
   }
 
+  override_data {
+    target = data.aws_iam_roles.servicequotas
+    values = {
+      names = ["AWSServiceRoleForServiceQuotas"]
+    }
+  }
+
   # Roles that someone else created carry the AWS description, not the module marker.
   override_data {
     target = data.aws_iam_role.spot
@@ -252,8 +266,15 @@ run "slrs_skipped_when_present" {
     }
   }
 
+  override_data {
+    target = data.aws_iam_role.servicequotas
+    values = {
+      description = "A service-linked role required for Service Quotas to access your service quotas."
+    }
+  }
+
   assert {
-    condition     = length(aws_iam_service_linked_role.spot) == 0 && length(aws_iam_service_linked_role.fleet) == 0
+    condition     = length(aws_iam_service_linked_role.spot) == 0 && length(aws_iam_service_linked_role.fleet) == 0 && length(aws_iam_service_linked_role.servicequotas) == 0
     error_message = "existing service-linked roles must not be created again"
   }
 }

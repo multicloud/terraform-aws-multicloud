@@ -87,7 +87,7 @@ variable "ebs_kms_key_arns" {
 }
 
 variable "manage_service_linked_roles" {
-  description = "Whether the module creates the EC2 Spot and EC2 Fleet service-linked roles when the account has none. Keep the default, true, and keep the Terraform state. Set false for a second instance of this module in the same account, or after a loss of state: the module then plans no service-linked role."
+  description = "Whether the module creates the EC2 Spot, EC2 Fleet and Service Quotas service-linked roles when the account has none. Keep the default, true, and keep the Terraform state. Set false for a second instance of this module in the same account, or after a loss of state: the module then plans no service-linked role."
   type        = bool
   default     = true
 }

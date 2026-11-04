@@ -2,6 +2,14 @@
 
 The Google Cloud module (`gcp/`) has its own `gcp/CHANGELOG.md`. The versions below are the AWS module.
 
+## 1.0.3
+
+Fix: AWS refused the first quota increase request of an account with `DependencyAccessDeniedException`.
+
+- The module now creates the Service Quotas service-linked role (`AWSServiceRoleForServiceQuotas`) when the account has none, in the same way as the EC2 Spot and EC2 Fleet roles. AWS needs this role before it accepts a quota increase request, and the Multicloud role cannot create it.
+- The permission policy does not change. The policy version stays 3.
+- Upgrade: change `version` to `1.0.3` and run `tofu apply` (or `terraform apply`). The apply adds one service-linked role. The identity that runs the apply needs `iam:CreateServiceLinkedRole` for `servicequotas.amazonaws.com`, as it already does for EC2 Spot and EC2 Fleet.
+
 ## 1.0.2
 
 Fix: Multicloud could not read your list of quota increase requests, so it could not ask AWS for spot quota without a risk of asking twice.

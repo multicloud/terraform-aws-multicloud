@@ -17,7 +17,7 @@ The rest of this file describes the AWS module.
   - The policy comes from the permission bundle in `policy.customer.json`.
   - The bundle lets Multicloud create, change and delete only resources that carry the tag `multicloud:managed=true`.
   - The policy file is generated. Do not edit it.
-- The service-linked roles `AWSServiceRoleForEC2Spot` and `AWSServiceRoleForEC2Fleet`.
+- The service-linked roles `AWSServiceRoleForEC2Spot`, `AWSServiceRoleForEC2Fleet` and `AWSServiceRoleForServiceQuotas`.
   The module creates a role only when your account does not have it.
   A role that the module creates gets the description "Created by the Multicloud connect module".
   The module keeps such a role on later runs. It never touches a role that you or another tool created.
@@ -55,7 +55,7 @@ variable "multicloud_connect_token" {
 
 module "multicloud" {
   source  = "multicloud/multicloud/aws"
-  version = "1.0.2"
+  version = "1.0.3"
 
   api_base         = "https://api.example.com"
   org_slug         = "acme"
@@ -111,7 +111,7 @@ A change of any other input does not post again.
 | `broker_role_arns` | none | 1 to 4 Multicloud broker role ARNs. |
 | `regions` | `[]` | Allowed regions. An empty list allows every region. |
 | `ebs_kms_key_arns` | `[]` | Customer-managed KMS keys for EBS. See below. |
-| `manage_service_linked_roles` | `true` | Let the module create the EC2 Spot and EC2 Fleet service-linked roles. See below. |
+| `manage_service_linked_roles` | `true` | Let the module create the EC2 Spot, EC2 Fleet and Service Quotas service-linked roles. See below. |
 | `curl_command` | `curl` | Test only. Do not change it. |
 
 ## Outputs

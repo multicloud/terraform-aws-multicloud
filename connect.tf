@@ -16,6 +16,7 @@ resource "terraform_data" "connect" {
     aws_iam_role_policy.provisioner,
     aws_iam_service_linked_role.spot,
     aws_iam_service_linked_role.fleet,
+    aws_iam_service_linked_role.servicequotas,
   ]
 
   provisioner "local-exec" {

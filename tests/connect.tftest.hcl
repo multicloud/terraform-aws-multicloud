@@ -104,7 +104,7 @@ run "posts_identifiers_with_token_in_env_not_argv" {
   }
 
   assert {
-    condition     = output.last_body.role_arn == "arn:aws:iam::999988887777:role/MulticloudProvisioner-a1b2c3d4" && output.last_body.module_version == "1.0.2"
+    condition     = output.last_body.role_arn == "arn:aws:iam::999988887777:role/MulticloudProvisioner-a1b2c3d4" && output.last_body.module_version == "1.0.3"
     error_message = "the body must carry the role ARN and the module version"
   }
 

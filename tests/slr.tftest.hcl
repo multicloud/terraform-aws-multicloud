@@ -23,7 +23,7 @@ variables {
   curl_command = "FAKE_CURL_CAPTURE=./tests/.capture/slr.log ./tests/fake_curl.sh"
 }
 
-run "first_apply_creates_both_roles" {
+run "first_apply_creates_all_roles" {
   command = apply
 
   override_data {
@@ -40,13 +40,20 @@ run "first_apply_creates_both_roles" {
     }
   }
 
-  assert {
-    condition     = length(aws_iam_service_linked_role.spot) == 1 && length(aws_iam_service_linked_role.fleet) == 1
-    error_message = "a fresh account must get both roles"
+  override_data {
+    target = data.aws_iam_roles.servicequotas
+    values = {
+      names = []
+    }
   }
 
   assert {
-    condition     = aws_iam_service_linked_role.spot[0].description == "Created by the Multicloud connect module" && aws_iam_service_linked_role.fleet[0].description == "Created by the Multicloud connect module"
+    condition     = length(aws_iam_service_linked_role.spot) == 1 && length(aws_iam_service_linked_role.fleet) == 1 && length(aws_iam_service_linked_role.servicequotas) == 1
+    error_message = "a fresh account must get all three roles"
+  }
+
+  assert {
+    condition     = aws_iam_service_linked_role.spot[0].description == "Created by the Multicloud connect module" && aws_iam_service_linked_role.fleet[0].description == "Created by the Multicloud connect module" && aws_iam_service_linked_role.servicequotas[0].description == "Created by the Multicloud connect module"
     error_message = "the module must mark the roles it creates"
   }
 }
@@ -74,6 +81,13 @@ run "reapply_keeps_module_created_roles" {
   }
 
   override_data {
+    target = data.aws_iam_roles.servicequotas
+    values = {
+      names = ["AWSServiceRoleForServiceQuotas"]
+    }
+  }
+
+  override_data {
     target = data.aws_iam_role.spot
     values = {
       description = "Created by the Multicloud connect module"
@@ -87,9 +101,16 @@ run "reapply_keeps_module_created_roles" {
     }
   }
 
+  override_data {
+    target = data.aws_iam_role.servicequotas
+    values = {
+      description = "Created by the Multicloud connect module"
+    }
+  }
+
   # A destroy would leave zero instances after the apply.
   assert {
-    condition     = length(aws_iam_service_linked_role.spot) == 1 && length(aws_iam_service_linked_role.fleet) == 1
+    condition     = length(aws_iam_service_linked_role.spot) == 1 && length(aws_iam_service_linked_role.fleet) == 1 && length(aws_iam_service_linked_role.servicequotas) == 1
     error_message = "re-apply must keep the roles that the module created"
   }
 }
@@ -119,6 +140,13 @@ run "unmanaged_plans_no_roles" {
   }
 
   override_data {
+    target = data.aws_iam_roles.servicequotas
+    values = {
+      names = ["AWSServiceRoleForServiceQuotas"]
+    }
+  }
+
+  override_data {
     target = data.aws_iam_role.spot
     values = {
       description = "Created by the Multicloud connect module"
@@ -132,8 +160,15 @@ run "unmanaged_plans_no_roles" {
     }
   }
 
+  override_data {
+    target = data.aws_iam_role.servicequotas
+    values = {
+      description = "Created by the Multicloud connect module"
+    }
+  }
+
   assert {
-    condition     = length(aws_iam_service_linked_role.spot) == 0 && length(aws_iam_service_linked_role.fleet) == 0
+    condition     = length(aws_iam_service_linked_role.spot) == 0 && length(aws_iam_service_linked_role.fleet) == 0 && length(aws_iam_service_linked_role.servicequotas) == 0
     error_message = "manage_service_linked_roles = false must plan no service-linked role"
   }
 }
@@ -157,6 +192,13 @@ run "foreign_roles_are_left_alone" {
   }
 
   override_data {
+    target = data.aws_iam_roles.servicequotas
+    values = {
+      names = ["AWSServiceRoleForServiceQuotas"]
+    }
+  }
+
+  override_data {
     target = data.aws_iam_role.spot
     values = {
       description = "Allows EC2 Spot to launch and manage spot instance lifecycle on your behalf."
@@ -170,8 +212,66 @@ run "foreign_roles_are_left_alone" {
     }
   }
 
+  override_data {
+    target = data.aws_iam_role.servicequotas
+    values = {
+      description = "A service-linked role required for Service Quotas to access your service quotas."
+    }
+  }
+
   assert {
-    condition     = length(aws_iam_service_linked_role.spot) == 0 && length(aws_iam_service_linked_role.fleet) == 0
+    condition     = length(aws_iam_service_linked_role.spot) == 0 && length(aws_iam_service_linked_role.fleet) == 0 && length(aws_iam_service_linked_role.servicequotas) == 0
     error_message = "a role with another description is not ours and must not be managed"
+  }
+}
+
+# The 1.0.2 -> 1.0.3 upgrade: the module already made the EC2 Spot and Fleet roles, and the
+# account has no Service Quotas role yet. The module keeps the two and adds the third.
+run "upgrade_adds_only_the_service_quotas_role" {
+  command = plan
+
+  override_data {
+    target = data.aws_iam_roles.spot
+    values = {
+      names = ["AWSServiceRoleForEC2Spot"]
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_roles.fleet
+    values = {
+      names = ["AWSServiceRoleForEC2Fleet"]
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_roles.servicequotas
+    values = {
+      names = []
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_role.spot
+    values = {
+      description = "Created by the Multicloud connect module"
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_role.fleet
+    values = {
+      description = "Created by the Multicloud connect module"
+    }
+  }
+
+  assert {
+    condition     = length(aws_iam_service_linked_role.spot) == 1 && length(aws_iam_service_linked_role.fleet) == 1 && length(aws_iam_service_linked_role.servicequotas) == 1
+    error_message = "the upgrade must keep the EC2 roles and add the Service Quotas role"
+  }
+
+  assert {
+    condition     = length(data.aws_iam_role.servicequotas) == 0
+    error_message = "an absent Service Quotas role must not be looked up by name"
   }
 }
