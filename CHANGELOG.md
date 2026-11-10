@@ -2,6 +2,15 @@
 
 The Google Cloud module (`gcp/`) has its own `gcp/CHANGELOG.md`. The Azure module (`azure/`) has its own `azure/CHANGELOG.md`. The versions below are the AWS module.
 
+## 1.2.0
+
+New: Multicloud can turn on the AWS opt-in regions of the account (for example `af-south-1`). The permission policy changes: the policy version is now 4.
+
+- The role gets `account:ListRegions`, `account:GetRegionOptStatus` and `account:EnableRegion` (statement `OptInRegions`).
+- With `regions` set, a new Deny statement allows `account:EnableRegion` only for the regions in the list (condition `account:TargetRegion`). The three `account:` calls are exempt from the region Deny, because the Account Management API answers only in `us-east-1`.
+- Multicloud turns on an opt-in region only when you did not say no at cloud account create. A region takes minutes to hours to turn on. Verify the account again when it is on. Multicloud never turns a region off.
+- Upgrade: change `version` to `1.2.0` and run `mctl cloud-account apply <id>`. The command issues a new connect token, so the apply posts policy version 4 to Multicloud. A plain `tofu apply` with the old token changes the role policy but does not post: Multicloud then still sees policy version 3 and does not turn on regions.
+
 ## 1.1.1
 
 Fix: in an account that already had some of the service-linked roles from another instance of this module, the apply stopped with "already exists". The documented way out, `manage_service_linked_roles = false`, then created none of the roles, and spot launches failed with `AuthFailure.ServiceLinkedRoleCreationNotPermitted`.

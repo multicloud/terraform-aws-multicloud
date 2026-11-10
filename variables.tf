@@ -65,7 +65,7 @@ variable "broker_role_arns" {
 }
 
 variable "regions" {
-  description = "AWS regions where Multicloud may act. The default, an empty list, allows every region. A non-empty list denies all other regions, except the ec2:DescribeRegions call."
+  description = "AWS regions where Multicloud may act. The default, an empty list, allows every region. A non-empty list denies all other regions, except the calls ec2:DescribeRegions, account:ListRegions, account:GetRegionOptStatus and account:EnableRegion; account:EnableRegion is then allowed only for the listed regions."
   type        = list(string)
   default     = []
 

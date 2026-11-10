@@ -276,9 +276,21 @@
           "*"
         ],
         "Sid": "Quota"
+      },
+      {
+        "Action": [
+          "account:EnableRegion",
+          "account:GetRegionOptStatus",
+          "account:ListRegions"
+        ],
+        "Effect": "Allow",
+        "Resource": [
+          "*"
+        ],
+        "Sid": "OptInRegions"
       }
     ],
     "Version": "2012-10-17"
   },
-  "policy_version": 3
+  "policy_version": 4
 }

@@ -133,6 +133,25 @@ Set `regions = ["us-east-1", "eu-west-1"]`.
 The policy then denies every action outside these regions.
 The call `ec2:DescribeRegions` stays allowed in every region.
 The connection check and the scheduler need it.
+The calls `account:ListRegions`, `account:GetRegionOptStatus` and `account:EnableRegion` also stay allowed.
+The Account Management API answers only in `us-east-1`.
+A second statement denies `account:EnableRegion` for every region outside the list (`account:TargetRegion`).
+Multicloud can then turn on only the opt-in regions in your list.
+
+## Opt-in regions
+
+Some AWS regions (for example `af-south-1` and `ap-east-1`) are off in a new account.
+AWS calls them opt-in regions.
+Module 1.2.0 (policy version 4) lets Multicloud turn them on: `account:ListRegions`, `account:GetRegionOptStatus` and `account:EnableRegion`.
+Multicloud turns on every opt-in region that is off (or only the regions in `regions`), unless you said no when you created the cloud account.
+To say no, clear "Turn on all AWS opt-in regions in this account" on the website, or run `mctl cloud-account create --no-opt-in-regions`.
+
+Turning on a region takes minutes to hours. AWS shows the region as `ENABLING` during that time.
+Multicloud does not use a region before it is on.
+When the region is on, verify the account again (`mctl cloud-account verify <id>`, or "Verify again" on the website). The verify adds the region to Multicloud.
+
+Multicloud never turns a region off.
+An organization SCP (service control policy) can deny `account:EnableRegion`. The verify then shows a warning and still passes.
 
 ## Set `ebs_kms_key_arns` when EBS uses your own key
 
@@ -156,7 +175,7 @@ If you do not set the variable, the role has no KMS permission.
 
 These items are not IAM permissions. You must check them yourself.
 
-- Opt-in regions (for example `af-south-1`) are off by default. You must enable them. The role cannot enable them.
+- With module 1.1.1 or older (policy version 3), the role cannot turn on opt-in regions. Turn them on yourself, or upgrade to 1.2.0. See "Opt-in regions".
 - New AWS accounts have low EC2 vCPU quotas for On-Demand and Spot. Check the quotas before you create the first pool. Multicloud will request increases in a later release.
 - DNS needs no permission in your account. Pool DNS uses Multicloud records, never your Route53.
 

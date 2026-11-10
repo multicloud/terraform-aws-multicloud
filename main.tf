@@ -3,7 +3,7 @@
 # with var.external_id.
 
 locals {
-  module_version = "1.1.1"
+  module_version = "1.2.0"
 
   # The source identity each Multicloud caller sets on its session (CloudTrail sourceIdentity).
   source_identities = var.source_identities
@@ -12,14 +12,26 @@ locals {
   bundle = jsondecode(file("${path.module}/policy.customer.json"))
 
   # With regions set, every action outside those regions is denied. ec2:DescribeRegions is
-  # exempt: the connection check and the scheduler call it from a home region.
+  # exempt: the connection check and the scheduler call it from a home region. The account:
+  # region calls are exempt too: the Account Management API answers only in us-east-1. The
+  # second Deny limits account:EnableRegion to the regions in the list (account:TargetRegion).
   region_statements = length(var.regions) == 0 ? [] : [
     {
       Sid       = "DenyOutsideAllowedRegions"
       Effect    = "Deny"
-      NotAction = ["ec2:DescribeRegions"]
+      NotAction = ["ec2:DescribeRegions", "account:ListRegions", "account:GetRegionOptStatus", "account:EnableRegion"]
       Resource  = "*"
       Condition = { StringNotEquals = { "aws:RequestedRegion" = var.regions } }
+    },
+  ]
+  # A separate list: one tuple of two object shapes does not match the empty tuple.
+  enable_region_statements = length(var.regions) == 0 ? [] : [
+    {
+      Sid       = "DenyEnableOutsideAllowedRegions"
+      Effect    = "Deny"
+      Action    = ["account:EnableRegion"]
+      Resource  = "*"
+      Condition = { StringNotEquals = { "account:TargetRegion" = var.regions } }
     },
   ]
 
@@ -28,6 +40,7 @@ locals {
     Statement = concat(
       local.bundle.document.Statement,
       local.region_statements,
+      local.enable_region_statements,
       local.ebs_kms_statements,
     )
   }

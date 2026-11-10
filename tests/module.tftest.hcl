@@ -107,7 +107,7 @@ run "policy_is_the_rendered_bundle" {
   }
 }
 
-run "regions_add_one_deny_with_describe_regions_exempt" {
+run "regions_add_two_denies_with_describe_and_account_calls_exempt" {
   command = plan
 
   variables {
@@ -115,28 +115,18 @@ run "regions_add_one_deny_with_describe_regions_exempt" {
   }
 
   assert {
-    condition     = length(jsondecode(aws_iam_role_policy.provisioner.policy).Statement) == length(jsondecode(file("policy.customer.json")).document.Statement) + 1
-    error_message = "regions must add exactly one statement"
+    condition     = length(jsondecode(aws_iam_role_policy.provisioner.policy).Statement) == length(jsondecode(file("policy.customer.json")).document.Statement) + 2
+    error_message = "regions must add exactly two statements"
   }
 
   assert {
-    condition     = jsondecode(aws_iam_role_policy.provisioner.policy).Statement[length(jsondecode(aws_iam_role_policy.provisioner.policy).Statement) - 1].Effect == "Deny"
-    error_message = "the region statement must be a Deny"
+    condition     = jsonencode([for s in jsondecode(aws_iam_role_policy.provisioner.policy).Statement : s if s.Sid == "DenyOutsideAllowedRegions"]) == jsonencode([{ Sid = "DenyOutsideAllowedRegions", Effect = "Deny", NotAction = ["ec2:DescribeRegions", "account:ListRegions", "account:GetRegionOptStatus", "account:EnableRegion"], Resource = "*", Condition = { StringNotEquals = { "aws:RequestedRegion" = ["us-east-1", "eu-west-1"] } } }])
+    error_message = "the region deny must exempt only ec2:DescribeRegions and the account: region calls, and fire outside the list"
   }
 
   assert {
-    condition     = jsonencode(jsondecode(aws_iam_role_policy.provisioner.policy).Statement[length(jsondecode(aws_iam_role_policy.provisioner.policy).Statement) - 1].NotAction) == jsonencode(["ec2:DescribeRegions"])
-    error_message = "the deny must exempt only ec2:DescribeRegions"
-  }
-
-  assert {
-    condition     = jsondecode(aws_iam_role_policy.provisioner.policy).Statement[length(jsondecode(aws_iam_role_policy.provisioner.policy).Statement) - 1].Resource == "*"
-    error_message = "the deny must cover Resource *"
-  }
-
-  assert {
-    condition     = jsonencode(jsondecode(aws_iam_role_policy.provisioner.policy).Statement[length(jsondecode(aws_iam_role_policy.provisioner.policy).Statement) - 1].Condition) == jsonencode({ StringNotEquals = { "aws:RequestedRegion" = ["us-east-1", "eu-west-1"] } })
-    error_message = "the deny must fire when aws:RequestedRegion is outside the list"
+    condition     = jsonencode([for s in jsondecode(aws_iam_role_policy.provisioner.policy).Statement : s if s.Sid == "DenyEnableOutsideAllowedRegions"]) == jsonencode([{ Sid = "DenyEnableOutsideAllowedRegions", Effect = "Deny", Action = ["account:EnableRegion"], Resource = "*", Condition = { StringNotEquals = { "account:TargetRegion" = ["us-east-1", "eu-west-1"] } } }])
+    error_message = "account:EnableRegion must be denied for a target region outside the list"
   }
 }
 
@@ -293,8 +283,8 @@ run "source_identities_default_unchanged" {
   }
 
   assert {
-    condition     = output.module_version == "1.1.1"
-    error_message = "the module version must be 1.1.1"
+    condition     = output.module_version == "1.2.0"
+    error_message = "the module version must be 1.2.0"
   }
 }
 
