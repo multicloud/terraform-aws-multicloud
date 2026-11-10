@@ -87,7 +87,7 @@ variable "ebs_kms_key_arns" {
 }
 
 variable "manage_service_linked_roles" {
-  description = "Whether the module creates the EC2 Spot, EC2 Fleet and Service Quotas service-linked roles when the account has none. Keep the default, true, and keep the Terraform state. Set false for a second instance of this module in the same account, or after a loss of state: the module then plans no service-linked role."
+  description = "Whether the module creates the EC2 Spot, EC2 Fleet and Service Quotas service-linked roles that the account does not have. It decides each role on its own and leaves alone a role that another instance of the module or another tool created. Keep the default, true, and keep the Terraform state. Set false only when you create all three roles in another way: the module then plans no service-linked role."
   type        = bool
   default     = true
 }
@@ -96,4 +96,26 @@ variable "curl_command" {
   description = "TEST ONLY. The command that sends the post-back. Leave the default, curl. The module tests replace it with a test double."
   type        = string
   default     = "curl"
+}
+
+variable "source_identities" {
+  description = "The source identities that the trust policy lets a Multicloud caller set on its session (CloudTrail sourceIdentity). The default is right for a customer account. Change it only if Multicloud tells you to, for example to add catalog when you connect Multicloud's own account."
+  type        = list(string)
+  default     = ["scheduler", "api-server"]
+
+  validation {
+    condition     = length(var.source_identities) >= 1
+    error_message = "source_identities needs at least one item."
+  }
+
+  validation {
+    condition     = alltrue([for i in var.source_identities : can(regex("^[a-z][a-z0-9-]{1,31}$", i))])
+    error_message = "Each source_identities item must match ^[a-z][a-z0-9-]{1,31}$."
+  }
+}
+
+variable "post_back" {
+  description = "Send the one-time post-back to the Multicloud API after the role exists. The default, true, is right for a customer. Set false only if Multicloud tells you to connect the account another way."
+  type        = bool
+  default     = true
 }

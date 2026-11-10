@@ -34,7 +34,9 @@ resource "terraform_data" "connect" {
     # --fail-with-body fails only on 400 and above, so the script reads the status code (-w)
     # and the body goes to a temp file (-o). On any other result the script prints the body
     # and the fallback. In this HCL heredoc, %% writes a literal %.
-    command = <<-EOT
+    # With post_back = false the command is a no-op. The resource address and triggers_replace do not
+    # change, so toggling post_back never replaces this resource.
+    command = !var.post_back ? "exit 0" : <<-EOT
       body_file="$(mktemp)" || exit 1
       trap 'rm -f "$body_file"' EXIT
       rc=0

@@ -104,7 +104,7 @@ run "posts_identifiers_with_token_in_env_not_argv" {
   }
 
   assert {
-    condition     = output.last_body.role_arn == "arn:aws:iam::999988887777:role/MulticloudProvisioner-a1b2c3d4" && output.last_body.module_version == "1.0.3"
+    condition     = output.last_body.role_arn == "arn:aws:iam::999988887777:role/MulticloudProvisioner-a1b2c3d4" && output.last_body.module_version == "1.1.1"
     error_message = "the body must carry the role ARN and the module version"
   }
 
@@ -232,5 +232,130 @@ run "new_token_reposts" {
   assert {
     condition     = !strcontains(output.argv, "tok-second-BBBB2222")
     error_message = "the token must never appear in argv"
+  }
+}
+
+run "default_post_back_unchanged" {
+  command = plan
+
+  module {
+    source = "./tests/capture"
+  }
+
+  variables {
+    path = "./tests/.capture/calls.log"
+  }
+
+  assert {
+    condition     = jsonencode(sort(keys(output.last_body))) == jsonencode(["module_version", "policy_version", "role_arn"]) && output.last_body.module_version == "1.1.1"
+    error_message = "the default post-back body must keep exactly its three keys"
+  }
+}
+
+run "apply_post_back_false" {
+  command = apply
+
+  override_resource {
+    target = random_id.suffix
+    values = {
+      hex = "a1b2c3d4"
+    }
+  }
+
+  override_resource {
+    target = aws_iam_role.provisioner
+    values = {
+      arn = "arn:aws:iam::999988887777:role/MulticloudProvisioner-a1b2c3d4"
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_roles.spot
+    values = {
+      names = ["AWSServiceRoleForEC2Spot"]
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_roles.fleet
+    values = {
+      names = ["AWSServiceRoleForEC2Fleet"]
+    }
+  }
+
+  variables {
+    connect_token = "tok-3rd-CC"
+    post_back     = false
+  }
+}
+
+run "post_back_false_runs_no_curl" {
+  command = plan
+
+  module {
+    source = "./tests/capture"
+  }
+
+  variables {
+    path = "./tests/.capture/calls.log"
+  }
+
+  assert {
+    condition     = output.calls == 2
+    error_message = "post_back = false must not call curl (the call count stays 2)"
+  }
+}
+
+run "apply_only_post_back_changes" {
+  command = apply
+
+  override_resource {
+    target = random_id.suffix
+    values = {
+      hex = "a1b2c3d4"
+    }
+  }
+
+  override_resource {
+    target = aws_iam_role.provisioner
+    values = {
+      arn = "arn:aws:iam::999988887777:role/MulticloudProvisioner-a1b2c3d4"
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_roles.spot
+    values = {
+      names = ["AWSServiceRoleForEC2Spot"]
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_roles.fleet
+    values = {
+      names = ["AWSServiceRoleForEC2Fleet"]
+    }
+  }
+
+  variables {
+    connect_token = "tok-3rd-CC"
+    post_back     = true
+  }
+}
+
+run "no_replacement_when_only_post_back_changes" {
+  command = plan
+
+  module {
+    source = "./tests/capture"
+  }
+
+  variables {
+    path = "./tests/.capture/calls.log"
+  }
+
+  assert {
+    condition     = output.calls == 2
+    error_message = "changing only post_back must not replace terraform_data.connect (no new post)"
   }
 }

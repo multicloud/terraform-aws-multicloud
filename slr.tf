@@ -4,22 +4,45 @@
 # cannot create them, and a second create call fails with "already exists". So the module looks
 # for each role first and creates it only when the account has none.
 #
+# Each role is decided on its own, from what the account has:
+#
+# - The account has no such role: the module creates it.
+# - The role carries the marker of THIS module instance (the description names this
+#   connection, account_row_id): the module created it, so it keeps it (count stays 1).
+# - Any other description (AWS, the console, another tool, or another instance of this module
+#   for another connection): the role exists, so EC2 and Service Quotas can use it. The module
+#   leaves it alone and plans nothing for it.
+#
 # Why the description marker exists: the lookup (data.aws_iam_roles) runs on every plan, and
 # after the first apply it finds the role that this module created. Without a marker, the
 # second plan would see "the account already has the role", set count to 0 and destroy the
 # role that the module itself created (a regions-only change or a token re-issue would do it).
-# So the module gives the roles it creates a fixed description. It keeps count = 1 when the
-# existing role carries that description, and uses count = 0 only for a role that someone
-# else created. On destroy, Terraform deletes only the roles that carry the marker.
-
+# The marker names the connection, so a second instance of the module in the same account sees
+# the roles of the first one as foreign and never tries to create them again.
 #
-# Limit: a role with the marker but no entry in this module's state plans a create, and AWS
-# rejects it with "already exists". That happens after a loss of the Terraform state, or for a
-# second instance of this module in the same account. Keep the state. In those two cases set
-# manage_service_linked_roles = false: the module then plans no service-linked role.
+# The count uses only data sources and input variables, so the plan knows it (random_id.suffix
+# is unknown on the first plan and cannot be in the marker).
+#
+# Modules 1.1.0 and older used one fixed marker for every instance (local.slr_legacy_marker).
+# The module still treats a role with that marker as its own, so an upgrade keeps the roles
+# that the state holds; the apply then changes the description to the new marker in place.
+# Limit: a role with one of these two markers that THIS state does not hold still plans a
+# create, and AWS answers "already exists". That happens after a loss of the Terraform state,
+# or when another folder created the role with module 1.1.0 or older. Fix: apply the new
+# module version in the folder that created the role (that rewrites its marker), or change
+# the role description in IAM to any other text. The next plan then leaves the role alone.
+# On destroy, Terraform deletes only the roles that this state holds.
 
 locals {
-  slr_marker = "Created by the Multicloud connect module"
+  slr_marker        = "Created by the Multicloud connect module (connection ${var.account_row_id})"
+  slr_legacy_marker = "Created by the Multicloud connect module"
+  slr_own_markers   = [local.slr_marker, local.slr_legacy_marker]
+
+  slr_create = {
+    spot          = length(data.aws_iam_roles.spot.names) == 0 || contains(local.slr_own_markers, try(data.aws_iam_role.spot[0].description, ""))
+    fleet         = length(data.aws_iam_roles.fleet.names) == 0 || contains(local.slr_own_markers, try(data.aws_iam_role.fleet[0].description, ""))
+    servicequotas = length(data.aws_iam_roles.servicequotas.names) == 0 || contains(local.slr_own_markers, try(data.aws_iam_role.servicequotas[0].description, ""))
+  }
 }
 
 data "aws_iam_roles" "spot" {
@@ -50,19 +73,19 @@ data "aws_iam_role" "servicequotas" {
 }
 
 resource "aws_iam_service_linked_role" "spot" {
-  count            = var.manage_service_linked_roles && (length(data.aws_iam_roles.spot.names) == 0 || try(data.aws_iam_role.spot[0].description, "") == local.slr_marker) ? 1 : 0
+  count            = var.manage_service_linked_roles && local.slr_create.spot ? 1 : 0
   aws_service_name = "spot.amazonaws.com"
   description      = local.slr_marker
 }
 
 resource "aws_iam_service_linked_role" "fleet" {
-  count            = var.manage_service_linked_roles && (length(data.aws_iam_roles.fleet.names) == 0 || try(data.aws_iam_role.fleet[0].description, "") == local.slr_marker) ? 1 : 0
+  count            = var.manage_service_linked_roles && local.slr_create.fleet ? 1 : 0
   aws_service_name = "ec2fleet.amazonaws.com"
   description      = local.slr_marker
 }
 
 resource "aws_iam_service_linked_role" "servicequotas" {
-  count            = var.manage_service_linked_roles && (length(data.aws_iam_roles.servicequotas.names) == 0 || try(data.aws_iam_role.servicequotas[0].description, "") == local.slr_marker) ? 1 : 0
+  count            = var.manage_service_linked_roles && local.slr_create.servicequotas ? 1 : 0
   aws_service_name = "servicequotas.amazonaws.com"
   description      = local.slr_marker
 }

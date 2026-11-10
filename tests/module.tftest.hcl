@@ -279,6 +279,58 @@ run "slrs_skipped_when_present" {
   }
 }
 
+run "source_identities_default_unchanged" {
+  command = plan
+
+  assert {
+    condition     = jsonencode(var.source_identities) == jsonencode(["scheduler", "api-server"])
+    error_message = "the default source_identities must stay scheduler and api-server"
+  }
+
+  assert {
+    condition     = jsonencode(jsondecode(aws_iam_role.provisioner.assume_role_policy).Statement[1].Condition) == jsonencode({ StringEquals = { "sts:SourceIdentity" = ["scheduler", "api-server"] } })
+    error_message = "the default trust statement must list scheduler and api-server"
+  }
+
+  assert {
+    condition     = output.module_version == "1.1.1"
+    error_message = "the module version must be 1.1.1"
+  }
+}
+
+run "source_identities_accepts_catalog" {
+  command = plan
+
+  variables {
+    source_identities = ["scheduler", "api-server", "catalog"]
+  }
+
+  assert {
+    condition     = jsonencode(jsondecode(aws_iam_role.provisioner.assume_role_policy).Statement[1].Condition) == jsonencode({ StringEquals = { "sts:SourceIdentity" = ["scheduler", "api-server", "catalog"] } })
+    error_message = "the trust statement must list the three source identities"
+  }
+}
+
+run "source_identities_bad_values_rejected" {
+  command = plan
+
+  variables {
+    source_identities = ["Bad Name"]
+  }
+
+  expect_failures = [var.source_identities]
+}
+
+run "source_identities_empty_rejected" {
+  command = plan
+
+  variables {
+    source_identities = []
+  }
+
+  expect_failures = [var.source_identities]
+}
+
 run "bad_inputs_are_rejected" {
   command = plan
 

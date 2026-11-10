@@ -1,6 +1,26 @@
 # Changelog
 
-The Google Cloud module (`gcp/`) has its own `gcp/CHANGELOG.md`. The versions below are the AWS module.
+The Google Cloud module (`gcp/`) has its own `gcp/CHANGELOG.md`. The Azure module (`azure/`) has its own `azure/CHANGELOG.md`. The versions below are the AWS module.
+
+## 1.1.1
+
+Fix: in an account that already had some of the service-linked roles from another instance of this module, the apply stopped with "already exists". The documented way out, `manage_service_linked_roles = false`, then created none of the roles, and spot launches failed with `AuthFailure.ServiceLinkedRoleCreationNotPermitted`.
+
+- The module decides each service-linked role (EC2 Spot, EC2 Fleet, Service Quotas) on its own. It creates a role when the account has none. It keeps a role that it created. It leaves every other role alone.
+- The description of a role that the module creates now names the connection: "Created by the Multicloud connect module (connection <account_row_id>)". A second instance of the module, for another connection, sees those roles as not its own and creates only the missing roles.
+- `manage_service_linked_roles` keeps its meaning. Set `false` only when you create all three roles in another way.
+- The permission policy does not change. The policy version stays 3.
+- Upgrade: change `version` to `1.1.1` and run `tofu apply` (or `terraform apply`). The apply changes the description of the roles that the module created; it does not replace them. The identity that runs the apply needs `iam:UpdateRole` on those roles (an administrator has it).
+- When several folders use this module in one account, upgrade first the folder that created the service-linked roles. Until that folder runs 1.1.1, its roles still have the old description "Created by the Multicloud connect module", and another folder plans to create them again ("already exists"). The README section "already exists for a service-linked role" has the steps.
+
+## 1.1.0
+
+Two new optional inputs. The defaults keep the 1.0.3 behavior, so an upgrade changes nothing for a customer.
+
+- `source_identities` (default `["scheduler", "api-server"]`): the source identities that the trust policy lets a Multicloud caller set. Each item must match `^[a-z][a-z0-9-]{1,31}$`; at least one item.
+- `post_back` (default `true`): set `false` to skip the one-time post-back. The resource `terraform_data.connect` and its `triggers_replace` do not change, so the upgrade plans no replacement of it.
+- The permission policy does not change. The policy version stays 3.
+- Upgrade: change `version` to `1.1.0` and run `tofu apply` (or `terraform apply`).
 
 ## 1.0.3
 

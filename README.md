@@ -5,6 +5,7 @@ It creates a role that Multicloud assumes.
 It creates no access key and no secret.
 
 The Google Cloud module is in `gcp/`. Its own `gcp/README.md` and `gcp/CHANGELOG.md` describe it.
+The Azure module is in `azure/`. Its own `azure/README.md` and `azure/CHANGELOG.md` describe it.
 The rest of this file describes the AWS module.
 
 ## What the module creates
@@ -18,9 +19,10 @@ The rest of this file describes the AWS module.
   - The bundle lets Multicloud create, change and delete only resources that carry the tag `multicloud:managed=true`.
   - The policy file is generated. Do not edit it.
 - The service-linked roles `AWSServiceRoleForEC2Spot`, `AWSServiceRoleForEC2Fleet` and `AWSServiceRoleForServiceQuotas`.
-  The module creates a role only when your account does not have it.
-  A role that the module creates gets the description "Created by the Multicloud connect module".
-  The module keeps such a role on later runs. It never touches a role that you or another tool created.
+  The module decides each role on its own. It creates a role only when your account does not have it.
+  A role that the module creates gets the description "Created by the Multicloud connect module (connection <account_row_id>)".
+  The module keeps such a role on later runs.
+  It never touches a role that you, another tool, or the module for another connection created.
 - One call to the Multicloud API, after the role exists.
   The call sends `role_arn`, `policy_version` and `module_version`.
   The call sends the connect token in an HTTP header.
@@ -39,6 +41,7 @@ The rest of this file describes the AWS module.
 - `curl` 7.76.0 or later in the `PATH`.
 - A Linux or macOS shell (`/bin/sh`). Windows needs WSL.
 - Network access from the machine that runs `apply` to the Multicloud API.
+- The identity that runs `apply` may create IAM roles and policies, and create service-linked roles (`iam:CreateServiceLinkedRole`). The upgrade from 1.1.0 or older to 1.1.1 also changes the description of the service-linked roles that the module created (`iam:UpdateRole`). An administrator has these permissions.
 
 ## Use
 
@@ -55,7 +58,7 @@ variable "multicloud_connect_token" {
 
 module "multicloud" {
   source  = "multicloud/multicloud/aws"
-  version = "1.0.3"
+  version = "1.1.0"
 
   api_base         = "https://api.example.com"
   org_slug         = "acme"
@@ -111,7 +114,9 @@ A change of any other input does not post again.
 | `broker_role_arns` | none | 1 to 4 Multicloud broker role ARNs. |
 | `regions` | `[]` | Allowed regions. An empty list allows every region. |
 | `ebs_kms_key_arns` | `[]` | Customer-managed KMS keys for EBS. See below. |
-| `manage_service_linked_roles` | `true` | Let the module create the EC2 Spot, EC2 Fleet and Service Quotas service-linked roles. See below. |
+| `manage_service_linked_roles` | `true` | Let the module create the EC2 Spot, EC2 Fleet and Service Quotas service-linked roles that your account does not have. Set `false` only when you create all three roles in another way. See below. |
+| `source_identities` | `["scheduler", "api-server"]` | Source identities that the trust policy allows. Keep the default unless Multicloud tells you to change it. |
+| `post_back` | `true` | Send the one-time post-back. Keep the default unless Multicloud tells you to change it. |
 | `curl_command` | `curl` | Test only. Do not change it. |
 
 ## Outputs
@@ -158,15 +163,37 @@ These items are not IAM permissions. You must check them yourself.
 ## Keep the Terraform state
 
 The module recognizes the service-linked roles that it created by their description.
-It knows which roles it owns only through the Terraform state.
-Keep the state.
-If the state is lost, or if a second instance of this module runs in the same account,
-the module tries to create a role that already exists, and AWS rejects the call ("already exists").
-In both cases set `manage_service_linked_roles = false`.
-The module then plans no service-linked role.
+The description names the connection (`account_row_id`).
+The module decides each role on its own:
 
-Do not set `manage_service_linked_roles = false` on a state that holds the service-linked roles of the module.
-Terraform then plans to destroy those roles.
+- Your account has no such role: the module creates it.
+- The role carries the description of this connection: the module keeps it.
+- The role has any other description: the module leaves it alone. EC2 and Service Quotas use it as it is.
+
+So a second instance of this module in the same account (for another connection) creates only the roles that are missing.
+It needs no extra setting.
+
+Keep the state.
+If the state is lost, the module tries to create again the roles that this connection created, and AWS rejects the call ("already exists").
+
+Use one folder for each connection.
+Do not change `account_row_id` in a folder that already created service-linked roles.
+The roles then carry the description of the old connection, so the plan destroys them.
+For a new connection, use a new folder.
+
+### "already exists" for a service-linked role
+
+The apply stops with an "already exists" error for `aws_iam_service_linked_role`.
+The role has the description of this connection, or the description "Created by the Multicloud connect module" of module 1.1.0 and older, and this folder's state does not hold it.
+Do one of these:
+
+- The role came from another folder in this account (module 1.1.0 or older): run `terraform apply` with module 1.1.1 or later in that folder first. The apply changes the role description to the connection of that folder. Then apply this folder again.
+- You lost the state of the folder that created the role, and no other folder holds the role: in the IAM console, open the role and change its description to any other text. Then apply again. The module then leaves the role alone.
+  Do not do this while a folder still holds the role in its state. That folder then sees a description that is not its own, and its next plan destroys the role.
+
+Do not set `manage_service_linked_roles = false` to get past this error. With `false` the module creates none of the three roles, and spot launches fail when the account has no EC2 Spot role.
+Set `false` only when you create all three roles in another way.
+On a state that holds the service-linked roles of the module, `false` also plans to destroy them.
 Read the plan before you apply it. If it destroys `aws_iam_service_linked_role`, set the value back to `true`.
 
 ## Remove access
@@ -175,7 +202,15 @@ Run `terraform destroy`.
 The role and its policy are deleted, and Multicloud cannot assume the role again.
 Terraform deletes a service-linked role only when it carries the description "Created by the Multicloud connect module".
 A role that the account already had stays.
+A service-linked role that this folder created is deleted even when another Multicloud connection in the same account uses it.
+The next `terraform apply` in the folder of that other connection creates the role again.
 AWS refuses to delete a service-linked role that a resource still uses.
+AWS also refuses to delete the Service Quotas role while a quota increase request is pending.
+Multicloud files these requests for your pools, so the account can have some.
+The destroy then stops with "Service-linked role can't be deleted because there are pending service limit increase request(s)".
+Everything else is deleted already; only the Service Quotas role is left in the state.
+You see the open requests in the AWS console under Service Quotas, Quota request history.
+Keep the folder and its state file. After AWS closes the requests, run `terraform destroy` again in the same folder, with the same AWS credentials.
 Resources that Multicloud created in your account stay.
 Delete them first (delete the pool in Multicloud), or find them by the tag `multicloud:managed=true`.
 

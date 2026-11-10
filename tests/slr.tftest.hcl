@@ -53,8 +53,8 @@ run "first_apply_creates_all_roles" {
   }
 
   assert {
-    condition     = aws_iam_service_linked_role.spot[0].description == "Created by the Multicloud connect module" && aws_iam_service_linked_role.fleet[0].description == "Created by the Multicloud connect module" && aws_iam_service_linked_role.servicequotas[0].description == "Created by the Multicloud connect module"
-    error_message = "the module must mark the roles it creates"
+    condition     = aws_iam_service_linked_role.spot[0].description == "Created by the Multicloud connect module (connection 42)" && aws_iam_service_linked_role.fleet[0].description == "Created by the Multicloud connect module (connection 42)" && aws_iam_service_linked_role.servicequotas[0].description == "Created by the Multicloud connect module (connection 42)"
+    error_message = "the module must mark the roles it creates with the marker of this connection"
   }
 }
 
@@ -90,21 +90,21 @@ run "reapply_keeps_module_created_roles" {
   override_data {
     target = data.aws_iam_role.spot
     values = {
-      description = "Created by the Multicloud connect module"
+      description = "Created by the Multicloud connect module (connection 42)"
     }
   }
 
   override_data {
     target = data.aws_iam_role.fleet
     values = {
-      description = "Created by the Multicloud connect module"
+      description = "Created by the Multicloud connect module (connection 42)"
     }
   }
 
   override_data {
     target = data.aws_iam_role.servicequotas
     values = {
-      description = "Created by the Multicloud connect module"
+      description = "Created by the Multicloud connect module (connection 42)"
     }
   }
 
@@ -115,9 +115,8 @@ run "reapply_keeps_module_created_roles" {
   }
 }
 
-# A second module instance in the same account, or a lost state: the role carries the module
-# marker but this state does not know it, so a create would fail with "already exists".
-# With manage_service_linked_roles = false the module plans no role and does no lookup.
+# manage_service_linked_roles = false: the account gets these roles in another way. The module
+# plans no service-linked role, whatever the account has.
 run "unmanaged_plans_no_roles" {
   command = plan
 
@@ -273,5 +272,210 @@ run "upgrade_adds_only_the_service_quotas_role" {
   assert {
     condition     = length(data.aws_iam_role.servicequotas) == 0
     error_message = "an absent Service Quotas role must not be looked up by name"
+  }
+}
+
+# Another instance of this module (1.1.1 or later), for another connection, created the
+# Service Quotas role; the account has no EC2 Spot or Fleet role. The module must create the
+# two missing roles and leave the Service Quotas role alone (it belongs to the other state).
+run "other_connection_role_is_left_alone_missing_roles_are_created" {
+  command = plan
+
+  override_data {
+    target = data.aws_iam_roles.spot
+    values = {
+      names = []
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_roles.fleet
+    values = {
+      names = []
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_roles.servicequotas
+    values = {
+      names = ["AWSServiceRoleForServiceQuotas"]
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_role.servicequotas
+    values = {
+      description = "Created by the Multicloud connect module (connection 7)"
+    }
+  }
+
+  assert {
+    condition     = length(aws_iam_service_linked_role.spot) == 1 && length(aws_iam_service_linked_role.fleet) == 1
+    error_message = "absent EC2 Spot and Fleet roles must be created, whatever the other roles are"
+  }
+
+  assert {
+    condition     = length(aws_iam_service_linked_role.servicequotas) == 0
+    error_message = "a role with the marker of another connection belongs to another state and must not be created again"
+  }
+}
+
+# Upgrade from 1.1.0 or older: the state holds roles with the old fixed marker. The module
+# keeps them (no destroy) and rewrites the description to the marker of this connection.
+run "upgrade_keeps_roles_with_the_legacy_marker" {
+  command = plan
+
+  override_data {
+    target = data.aws_iam_roles.spot
+    values = {
+      names = ["AWSServiceRoleForEC2Spot"]
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_roles.fleet
+    values = {
+      names = ["AWSServiceRoleForEC2Fleet"]
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_roles.servicequotas
+    values = {
+      names = ["AWSServiceRoleForServiceQuotas"]
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_role.spot
+    values = {
+      description = "Created by the Multicloud connect module"
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_role.fleet
+    values = {
+      description = "Created by the Multicloud connect module"
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_role.servicequotas
+    values = {
+      description = "Created by the Multicloud connect module"
+    }
+  }
+
+  assert {
+    condition     = length(aws_iam_service_linked_role.spot) == 1 && length(aws_iam_service_linked_role.fleet) == 1 && length(aws_iam_service_linked_role.servicequotas) == 1
+    error_message = "an upgrade must keep the roles with the legacy marker"
+  }
+
+  assert {
+    condition     = aws_iam_service_linked_role.servicequotas[0].description == "Created by the Multicloud connect module (connection 42)"
+    error_message = "the upgrade must move the role to the marker of this connection"
+  }
+}
+
+# The documented limit, and the live case of 2026-11-10 (dev2): another folder created the
+# Service Quotas role with module 1.0.3 (fixed legacy marker), and the account has no EC2
+# Spot or Fleet role. The module cannot tell that role from one that this state holds, so it
+# plans all three; AWS then refuses the Service Quotas create with "already exists".
+# Remedy (README, CHANGELOG): apply 1.1.1 first in the folder that created the role, which
+# rewrites its marker to that connection. This run pins the behavior so that a change to it
+# is a decision, not an accident.
+run "legacy_marker_from_another_folder_still_plans_a_create" {
+  command = plan
+
+  override_data {
+    target = data.aws_iam_roles.spot
+    values = {
+      names = []
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_roles.fleet
+    values = {
+      names = []
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_roles.servicequotas
+    values = {
+      names = ["AWSServiceRoleForServiceQuotas"]
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_role.servicequotas
+    values = {
+      description = "Created by the Multicloud connect module"
+    }
+  }
+
+  assert {
+    condition     = length(aws_iam_service_linked_role.spot) == 1 && length(aws_iam_service_linked_role.fleet) == 1 && length(aws_iam_service_linked_role.servicequotas) == 1
+    error_message = "a role with the legacy marker counts as this module's own; the missing roles are still created"
+  }
+}
+
+# One folder per connection. A new account_row_id in a folder that created the roles under
+# another connection makes those roles foreign, so the plan destroys them (README, "Keep the
+# Terraform state"). This run pins that behavior so that a change to it is a decision.
+run "new_connection_in_old_folder_plans_to_destroy_its_roles" {
+  command = plan
+
+  variables {
+    account_row_id = 43
+  }
+
+  override_data {
+    target = data.aws_iam_roles.spot
+    values = {
+      names = ["AWSServiceRoleForEC2Spot"]
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_roles.fleet
+    values = {
+      names = ["AWSServiceRoleForEC2Fleet"]
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_roles.servicequotas
+    values = {
+      names = ["AWSServiceRoleForServiceQuotas"]
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_role.spot
+    values = {
+      description = "Created by the Multicloud connect module (connection 42)"
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_role.fleet
+    values = {
+      description = "Created by the Multicloud connect module (connection 42)"
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_role.servicequotas
+    values = {
+      description = "Created by the Multicloud connect module (connection 42)"
+    }
+  }
+
+  assert {
+    condition     = length(aws_iam_service_linked_role.spot) == 0 && length(aws_iam_service_linked_role.fleet) == 0 && length(aws_iam_service_linked_role.servicequotas) == 0
+    error_message = "roles marked with another connection are not this folder's roles"
   }
 }
