@@ -283,8 +283,8 @@ run "source_identities_default_unchanged" {
   }
 
   assert {
-    condition     = output.module_version == "1.3.0"
-    error_message = "the module version must be 1.3.0"
+    condition     = output.module_version == "1.3.1"
+    error_message = "the module version must be 1.3.1"
   }
 }
 

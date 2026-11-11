@@ -104,7 +104,7 @@ run "posts_identifiers_with_token_in_env_not_argv" {
   }
 
   assert {
-    condition     = output.last_body.role_arn == "arn:aws:iam::999988887777:role/MulticloudProvisioner-a1b2c3d4" && output.last_body.module_version == "1.3.0"
+    condition     = output.last_body.role_arn == "arn:aws:iam::999988887777:role/MulticloudProvisioner-a1b2c3d4" && output.last_body.module_version == "1.3.1"
     error_message = "the body must carry the role ARN and the module version"
   }
 
@@ -247,7 +247,7 @@ run "default_post_back_unchanged" {
   }
 
   assert {
-    condition     = jsonencode(sort(keys(output.last_body))) == jsonencode(["module_version", "policy_version", "role_arn"]) && output.last_body.module_version == "1.3.0"
+    condition     = jsonencode(sort(keys(output.last_body))) == jsonencode(["module_version", "policy_version", "role_arn"]) && output.last_body.module_version == "1.3.1"
     error_message = "the default post-back body must keep exactly its three keys"
   }
 }

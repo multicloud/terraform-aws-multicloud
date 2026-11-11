@@ -59,7 +59,7 @@ variable "multicloud_connect_token" {
 
 module "multicloud" {
   source  = "multicloud/multicloud/aws"
-  version = "1.3.0"
+  version = "1.3.1"
 
   api_base         = "https://api.example.com"
   org_slug         = "acme"
@@ -289,7 +289,8 @@ Path A:
 - `mctl cloud-account destroy <id>` removes the Multicloud role from the state and closes the account.
 - By hand: run `terraform state rm module.multicloud`, then `terraform destroy`.
   The new account is closed, so its roles go with it.
-- The command can report a timeout while AWS closes the account. That is expected; nothing is broken.
+- AWS takes 10 minutes or more to close the account; Terraform waits up to 30 minutes (module 1.3.1 or later).
+  If the command still reports a timeout, that is expected; nothing is broken.
   The account is closed when the AWS console shows it as Closed. Then run `terraform state rm module.multicloud_account`.
 - AWS keeps a closed account for 90 days. Its email cannot be used for a new AWS account in that time.
   `CloseAccount` has a quota of closures in a rolling 30 days.

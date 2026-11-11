@@ -2,6 +2,14 @@
 
 The Google Cloud module (`gcp/`) has its own `gcp/CHANGELOG.md`. The Azure module (`azure/`) has its own `azure/CHANGELOG.md`. The versions below are the AWS module.
 
+## 1.3.1
+
+Fix: closing a new account (`modules/account`, `terraform destroy`) reported a timeout although AWS closed the account.
+
+- AWS takes 10 minutes or more to close an account. The AWS provider waited only 10 minutes (its default) and stopped just before AWS reported the account as closed.
+- The account resource now waits up to 30 minutes (`timeouts { delete = "30m" }`).
+- The permission policy does not change. The policy version stays 5.
+
 ## 1.3.0
 
 New: the submodule `modules/account` (registry source `multicloud/multicloud/aws//modules/account`) creates a new AWS account for Multicloud in your AWS Organizations (`aws_organizations_account`, `close_on_deletion = true`). It runs with your management account credentials. Outputs: `account_id` and `admin_role_arn`. The permission policy changes: the policy version is now 5.

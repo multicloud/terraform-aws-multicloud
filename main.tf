@@ -3,7 +3,7 @@
 # with var.external_id.
 
 locals {
-  module_version = "1.3.0"
+  module_version = "1.3.1"
 
   # The source identity each Multicloud caller sets on its session (CloudTrail sourceIdentity).
   source_identities = var.source_identities
