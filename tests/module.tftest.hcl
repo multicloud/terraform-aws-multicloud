@@ -120,7 +120,7 @@ run "regions_add_two_denies_with_describe_and_account_calls_exempt" {
   }
 
   assert {
-    condition     = jsonencode([for s in jsondecode(aws_iam_role_policy.provisioner.policy).Statement : s if s.Sid == "DenyOutsideAllowedRegions"]) == jsonencode([{ Sid = "DenyOutsideAllowedRegions", Effect = "Deny", NotAction = ["ec2:DescribeRegions", "account:ListRegions", "account:GetRegionOptStatus", "account:EnableRegion"], Resource = "*", Condition = { StringNotEquals = { "aws:RequestedRegion" = ["us-east-1", "eu-west-1"] } } }])
+    condition     = jsonencode([for s in jsondecode(aws_iam_role_policy.provisioner.policy).Statement : s if s.Sid == "DenyOutsideAllowedRegions"]) == jsonencode([{ Sid = "DenyOutsideAllowedRegions", Effect = "Deny", NotAction = ["ec2:DescribeRegions", "account:ListRegions", "account:GetRegionOptStatus", "account:EnableRegion", "account:GetAccountInformation"], Resource = "*", Condition = { StringNotEquals = { "aws:RequestedRegion" = ["us-east-1", "eu-west-1"] } } }])
     error_message = "the region deny must exempt only ec2:DescribeRegions and the account: region calls, and fire outside the list"
   }
 
@@ -283,8 +283,8 @@ run "source_identities_default_unchanged" {
   }
 
   assert {
-    condition     = output.module_version == "1.2.0"
-    error_message = "the module version must be 1.2.0"
+    condition     = output.module_version == "1.3.0"
+    error_message = "the module version must be 1.3.0"
   }
 }
 

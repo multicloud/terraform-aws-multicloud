@@ -3,6 +3,7 @@
     "Statement": [
       {
         "Action": [
+          "account:GetAccountInformation",
           "ec2:DescribeAvailabilityZones",
           "ec2:DescribeImages",
           "ec2:DescribeInstances",
@@ -292,5 +293,5 @@
     ],
     "Version": "2012-10-17"
   },
-  "policy_version": 4
+  "policy_version": 5
 }

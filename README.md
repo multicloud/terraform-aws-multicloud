@@ -41,6 +41,7 @@ The rest of this file describes the AWS module.
 - `curl` 7.76.0 or later in the `PATH`.
 - A Linux or macOS shell (`/bin/sh`). Windows needs WSL.
 - Network access from the machine that runs `apply` to the Multicloud API.
+- Path A also needs management account permissions. See "Requirement: a new AWS account for Multicloud".
 - The identity that runs `apply` may create IAM roles and policies, and create service-linked roles (`iam:CreateServiceLinkedRole`). The upgrade from 1.1.0 or older to 1.1.1 also changes the description of the service-linked roles that the module created (`iam:UpdateRole`). An administrator has these permissions.
 
 ## Use
@@ -58,7 +59,7 @@ variable "multicloud_connect_token" {
 
 module "multicloud" {
   source  = "multicloud/multicloud/aws"
-  version = "1.1.0"
+  version = "1.3.0"
 
   api_base         = "https://api.example.com"
   org_slug         = "acme"
@@ -208,7 +209,8 @@ Do one of these:
 
 - The role came from another folder in this account (module 1.1.0 or older): run `terraform apply` with module 1.1.1 or later in that folder first. The apply changes the role description to the connection of that folder. Then apply this folder again.
 - You lost the state of the folder that created the role, and no other folder holds the role: in the IAM console, open the role and change its description to any other text. Then apply again. The module then leaves the role alone.
-  Do not do this while a folder still holds the role in its state. That folder then sees a description that is not its own, and its next plan destroys the role.
+  Do not do this while a folder still holds the role in its state. That folder then sees a description that is not its own, and its next plan shows a destroy of the role.
+  If you see that destroy, do not apply. Change the description back to the text it had, then plan again.
 
 Do not set `manage_service_linked_roles = false` to get past this error. With `false` the module creates none of the three roles, and spot launches fail when the account has no EC2 Spot role.
 Set `false` only when you create all three roles in another way.
@@ -219,8 +221,8 @@ Read the plan before you apply it. If it destroys `aws_iam_service_linked_role`,
 
 Run `terraform destroy`.
 The role and its policy are deleted, and Multicloud cannot assume the role again.
-Terraform deletes a service-linked role only when it carries the description "Created by the Multicloud connect module".
-A role that the account already had stays.
+Terraform deletes only the service-linked roles that this folder created (the roles in its state).
+A service-linked role that is not in the state of this folder stays, for example a role that the account already had or that another folder created.
 A service-linked role that this folder created is deleted even when another Multicloud connection in the same account uses it.
 The next `terraform apply` in the folder of that other connection creates the role again.
 AWS refuses to delete a service-linked role that a resource still uses.
@@ -233,11 +235,67 @@ Keep the folder and its state file. After AWS closes the requests, run `terrafor
 Resources that Multicloud created in your account stay.
 Delete them first (delete the pool in Multicloud), or find them by the tag `multicloud:managed=true`.
 
-## Recommendation: use a dedicated AWS account
+## Requirement: a new AWS account for Multicloud
 
-Use an account that holds only Multicloud resources.
-The tag condition limits the role, but a dedicated account gives a clear cost view and a clear boundary.
-Delete the account to remove everything.
+Multicloud works only inside the AWS account that you connect. Use a new AWS account made for Multicloud.
+The tag condition limits the role, but a new account gives a clear cost view and a clear boundary.
+There are three paths.
+
+- **Path A (default): your Terraform creates the account in your AWS Organizations.**
+  Run it with your management account credentials. Multicloud never gets them.
+  Run `mctl cloud-account create --cloud AWS --new-account-email you+multicloud@company.com`, then `mctl cloud-account apply <id>`.
+  The file runs in two stages: first the new account (submodule `modules/account`), then the Multicloud role in it.
+  A complete example is in `examples/aws-new-account/main.tf`.
+- **Path B: your AWS administrator creates the account.** In the AWS console, open AWS Organizations,
+  then **Add an AWS account**, then **Create an AWS account**. Sign in to the new account (switch to the role
+  `OrganizationAccountAccessRole`). Then run the normal snippet in it.
+- **Path C: you have no AWS Organizations.** Sign up for a new standalone AWS account with an email that no other AWS account uses.
+  Then run the normal snippet in it.
+
+The email of the new account must be unused by every other AWS account.
+A plus-address such as `you+multicloud@company.com` usually works.
+
+### What path A needs in the management account
+
+The identity that runs path A needs these permissions in the management account:
+
+- `organizations:CreateAccount`, `organizations:DescribeCreateAccountStatus`, `organizations:DescribeAccount`
+- `organizations:ListParents`, and `organizations:MoveAccount` when you set `parent_id`
+- `organizations:CloseAccount` (for destroy)
+- `organizations:DescribeOrganization` (the provider may read it; read access is enough)
+- `sts:AssumeRole` on the new `OrganizationAccountAccessRole`
+
+An administrator has all of them.
+Multicloud gets no permission in the management account.
+The Multicloud broker roles trust only the role `MulticloudProvisioner-*` in the new account.
+They never assume `OrganizationAccountAccessRole`.
+
+### When the account is not new
+
+Multicloud checks the account at the first verify: it must be new, and no EC2 machine may run in it.
+When the account is older than the connection, or machines exist, nothing is refused and nothing is connected yet.
+The verify asks an organization owner of your Multicloud organization to approve.
+The owner runs `mctl cloud-account accept-shared-account <id>` and types the 12-digit account ID.
+Multicloud records who approved and when.
+
+### Destroy
+
+Every path:
+
+- `terraform destroy` fails on `AWSServiceRoleForEC2Spot` with `Open or Active spot instance requests found` for a few minutes after the last spot instance ends. Wait 5 minutes and run it again.
+
+Path A:
+
+- `mctl cloud-account destroy <id>` removes the Multicloud role from the state and closes the account.
+- By hand: run `terraform state rm module.multicloud`, then `terraform destroy`.
+  The new account is closed, so its roles go with it.
+- The command can report a timeout while AWS closes the account. That is expected; nothing is broken.
+  The account is closed when the AWS console shows it as Closed. Then run `terraform state rm module.multicloud_account`.
+- AWS keeps a closed account for 90 days. Its email cannot be used for a new AWS account in that time.
+  `CloseAccount` has a quota of closures in a rolling 30 days.
+
+Paths B and C: run `terraform destroy` in the folder, then close the account in the AWS console
+(path B from the management account, path C from the account itself).
 
 ## Versions
 

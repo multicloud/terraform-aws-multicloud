@@ -2,6 +2,15 @@
 
 The Google Cloud module (`gcp/`) has its own `gcp/CHANGELOG.md`. The Azure module (`azure/`) has its own `azure/CHANGELOG.md`. The versions below are the AWS module.
 
+## 1.3.0
+
+New: the submodule `modules/account` (registry source `multicloud/multicloud/aws//modules/account`) creates a new AWS account for Multicloud in your AWS Organizations (`aws_organizations_account`, `close_on_deletion = true`). It runs with your management account credentials. Outputs: `account_id` and `admin_role_arn`. The permission policy changes: the policy version is now 5.
+
+- The role gets `account:GetAccountInformation` (statement `Read`). It is read-only and shows only the name, ID, creation date and state of the account itself.
+- The new action is exempt from the Deny `DenyOutsideAllowedRegions`, because the Account Management API answers in `us-east-1`.
+- Multicloud uses it at the first verify to check that the account is new.
+- Upgrade: change `version` to `1.3.0` and run `mctl cloud-account apply <id>`. The command issues a new connect token, so the apply posts policy version 5 to Multicloud. A plain `tofu apply` with the old token changes the role policy but does not post.
+
 ## 1.2.0
 
 New: Multicloud can turn on the AWS opt-in regions of the account (for example `af-south-1`). The permission policy changes: the policy version is now 4.
